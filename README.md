@@ -26,6 +26,12 @@
 
   - 操作: 重置(重置剩余时间为设置的"关注过期天数") / 永久(将剩余时间设置为永不过期) / 检查(检查该楼层是否可见) / 删除(取消对该楼层的关注)
 
+## 安装
+
+- Tempermonkey用户: 点击[安装](https://www.tampermonkey.net/script_installation.php#url=https://update.greasyfork.org/scripts/531676/NGA%E6%A3%80%E6%9F%A5%E5%B8%96%E5%AD%90%E5%8F%AF%E8%A7%81%E7%8A%B6%E6%80%81.user.js)
+
+- GreasyFork: [地址](https://greasyfork.org/zh-CN/scripts/531676-nga%E6%A3%80%E6%9F%A5%E5%B8%96%E5%AD%90%E5%8F%AF%E8%A7%81%E7%8A%B6%E6%80%81)
+
 ## 兼容性支持
 
 - 脚本管理器: 理论上 **Tampermonkey** 和 **Greasymonkey** 应该都可以，但我只测试过前者，若有问题欢迎反馈

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NGA检查帖子可见状态
 // @namespace    https://github.com/stone5265/GreasyFork-NGA-Check-Post-Status
-// @version      0.1.0
+// @version      0.1.2
 // @author       stone5265
 // @description  检查自己发布的"主题/回复"别人是否能看见，并且可以关注任意人发布的"主题/回复"可见状态，当不可见时给予提示
 // @license      MIT
@@ -295,6 +295,9 @@
         },
         // 位于帖子列表页时自动检查关注列表
         async renderThreadsFunc($el) {
+            if ($el.attr('class') !== 'row1 topicrow') {
+                return
+            }
             let autoCheckInterval = script.setting.advanced.autoCheckInterval
             if (autoCheckInterval >= 0) {
                 // 最短间隔为5分钟
@@ -572,7 +575,7 @@
                 <tr>
                     <td title="${record.topicName}">${record.topicName}</td>
                     <td title="${floor}"><a href="${href}" class="urlincontent">${floor}</a></td>
-                    <td title="${visibleStatus}">${visibleStatus}</td>
+                    <td>${visibleStatus}</td>
                     <td title="${timeSinceLastCheck}">${timeSinceLastCheck}</td>
                     <td title="${timeLeft}">${timeLeft}</td>
                     <td>

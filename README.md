@@ -28,9 +28,9 @@
 
 ## 安装
 
-- Tempermonkey用户: 点击[安装](https://www.tampermonkey.net/script_installation.php#url=https://update.greasyfork.org/scripts/531676/NGA%E6%A3%80%E6%9F%A5%E5%B8%96%E5%AD%90%E5%8F%AF%E8%A7%81%E7%8A%B6%E6%80%81.user.js)
-
 - GreasyFork: [地址](https://greasyfork.org/zh-CN/scripts/531676-nga%E6%A3%80%E6%9F%A5%E5%B8%96%E5%AD%90%E5%8F%AF%E8%A7%81%E7%8A%B6%E6%80%81)
+
+- GreasyFork国内镜像: [地址](https://greasyfork.dpdns.org/zh-CN/scripts/531676-nga%E6%A3%80%E6%9F%A5%E5%B8%96%E5%AD%90%E5%8F%AF%E8%A7%81%E7%8A%B6%E6%80%81)
 
 ## 兼容性支持
 

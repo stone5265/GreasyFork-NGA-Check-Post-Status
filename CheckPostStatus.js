@@ -1,15 +1,13 @@
 // ==UserScript==
 // @name         NGA检查帖子可见状态
 // @namespace    https://github.com/stone5265/GreasyFork-NGA-Check-Post-Status
-// @version      0.1.2
+// @version      0.1.3
 // @author       stone5265
 // @description  检查自己发布的"主题/回复"别人是否能看见，并且可以关注任意人发布的"主题/回复"可见状态，当不可见时给予提示
 // @license      MIT
 // @require      https://lf9-cdn-tos.bytecdntp.com/cdn/expire-1-y/localforage/1.10.0/localforage.min.js#sha512=+BMamP0e7wn39JGL8nKAZ3yAQT2dL5oaXWr4ZYlTGkKOaoXM/Yj7c4oy50Ngz5yoUutAG17flueD4F6QpTlPng==
 // @require      https://lf3-cdn-tos.bytecdntp.com/cdn/expire-1-y/jquery/3.4.0/jquery.min.js#sha512=Pa4Jto+LuCGBHy2/POQEbTh0reuoiEXQWXGn8S7aRlhcwpVkO8+4uoZVSOqUjdCsE+77oygfu2Tl+7qGHGIWsw==
 // @match        *://bbs.nga.cn/*
-// @match        *://ngabbs.com/*
-// @match        *://nga.178.com/*
 // @grant        GM_registerMenuCommand
 // @grant        GM_setValue
 // @grant        GM_getValue
@@ -181,7 +179,7 @@
                     for (const key of rows) {
                         const isVisible = await this_.checkRowVisible(key)
                         if (!isVisible) {
-                            invisibleNum++;
+                            invisibleNum++
                         }
 
                         processed++
@@ -189,7 +187,7 @@
                         $button.text(`检查中... (${processed}/${rows.length})`)
 
                         if (processed < rows.length) {
-                            await new Promise(resolve => setTimeout(resolve, 250))
+                            await new Promise(resolve => setTimeout(resolve, 1000))
                         }
                     }
 
@@ -224,7 +222,7 @@
                 }
             })
 
-            // // 关注列表
+            // 关注列表
             GM_registerMenuCommand('关注列表', function () {
                 if($('#cps__watchlist_panel').length > 0) return
                 $('body').append(`
@@ -288,6 +286,7 @@
                     $('.cps__tab-header > span, .cps__tab-content').removeClass('cps__tab-active')
                     $(this).addClass('cps__tab-active')
                     $('.cps__tab-content').eq($(this).index()).addClass('cps__tab-active')
+                    this_.reloadWatchlist()
                 })
                 //重载名单
                 this_.reloadWatchlist()
@@ -295,7 +294,8 @@
         },
         // 位于帖子列表页时自动检查关注列表
         async renderThreadsFunc($el) {
-            if ($el.attr('class') !== 'row1 topicrow') {
+            // 位于列表页第一页的第一个帖子时
+            if ($el.find('a').attr('id') !== 't_rc1_0') {
                 return
             }
             let autoCheckInterval = script.setting.advanced.autoCheckInterval
@@ -307,10 +307,13 @@
                 return
             }
             const this_ = this
+            const $ = script.libs.$
             const lastAutoCheckTime = await GM_getValue('cps__lastAutoCheckTime')
             const currentTime = Math.floor(Date.now() / 1000) / 60
+            const deltaTime = (currentTime - parseFloat(lastAutoCheckTime)) / 60
+            // return
             // 距离上次自动检查小于设置的间隔
-            if (lastAutoCheckTime && currentTime - parseFloat(lastAutoCheckTime) >= autoCheckInterval) {
+            if (lastAutoCheckTime && deltaTime < autoCheckInterval) {
                 return
             }
 
@@ -333,13 +336,16 @@
                 for (const key of rows) {
                     const isVisible = await this_.checkRowVisible(key)
                     if (!isVisible) {
-                        invisibleNum++;
+                        invisibleNum++
                     }
 
                     processed++
+                    this_.reloadWatchlist()
+                    const $button = $(document).find('.cps__tab-active .cps__panel-checkall')
+                    if ($button.length) $button.text(`检查中... (${processed}/${rows.length})`).prop('disabled', true)
 
                     if (processed < rows.length) {
-                        await new Promise(resolve => setTimeout(resolve, 250))
+                        await new Promise(resolve => setTimeout(resolve, 1500))
                     }
                 }
 
@@ -348,8 +354,10 @@
             } catch (err) {
                 // this_.mainScript.popMsg(`失败！${err.message}`)
                 script.popMsg(`[自动检查]失败！${err.message}`)
+            } finally {
+                const $button = $(document).find('.cps__tab-active .cps__panel-checkall')
+                if ($button.length) $button.text('检查所有').prop('disabled', false)
             }
-
         },
         async renderFormsFunc($el) {
             // const $ = this.mainScript.libs.$
@@ -397,6 +405,7 @@
 
             // 检查该页面下登录用户的发言
             if (!isNaN(__CURRENT_UID) && uid === __CURRENT_UID) {
+                // const checkUrl = `${href.split('?')[0]}?${$el[0].baseURI.split('?')[1]}`
                 const checkUrl = $el[0].baseURI
                 // 使用游客状态对当前页可见楼层进行标记
                 await this.lock

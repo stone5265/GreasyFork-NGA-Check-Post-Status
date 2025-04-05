@@ -1,18 +1,21 @@
 // ==UserScript==
 // @name         NGA检查帖子可见状态
 // @namespace    https://github.com/stone5265/GreasyFork-NGA-Check-Post-Status
-// @version      0.1.3
+// @version      0.2.0
 // @author       stone5265
 // @description  检查自己发布的"主题/回复"别人是否能看见，并且可以关注任意人发布的"主题/回复"可见状态，当不可见时给予提示
 // @license      MIT
 // @require      https://lf9-cdn-tos.bytecdntp.com/cdn/expire-1-y/localforage/1.10.0/localforage.min.js#sha512=+BMamP0e7wn39JGL8nKAZ3yAQT2dL5oaXWr4ZYlTGkKOaoXM/Yj7c4oy50Ngz5yoUutAG17flueD4F6QpTlPng==
 // @require      https://lf3-cdn-tos.bytecdntp.com/cdn/expire-1-y/jquery/3.4.0/jquery.min.js#sha512=Pa4Jto+LuCGBHy2/POQEbTh0reuoiEXQWXGn8S7aRlhcwpVkO8+4uoZVSOqUjdCsE+77oygfu2Tl+7qGHGIWsw==
-// @match        *://bbs.nga.cn/*
+// @match       *://bbs.nga.cn/*
+// @match       *://ngabbs.com/*
+// @match       *://nga.178.com/*
 // @grant        GM_registerMenuCommand
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_deleteValue
 // @grant        GM_listValues
+// @grant        GM_xmlhttpRequest
 // @grant        unsafeWindow
 // @inject-into  content
 // ==/UserScript==
@@ -50,6 +53,7 @@
         ],
         store: null,
         lastCheckUrl: '',
+        prevVisibleFloor: null,
         visibleFloorNames: [],
         lock: Promise.resolve(),
         initFunc() {
@@ -293,7 +297,7 @@
             })
         },
         // 位于帖子列表页时自动检查关注列表
-        async renderThreadsFunc($el) {
+        async renderThreadsFunc($el, isFirst=false) {
             // 位于列表页第一页的第一个帖子时
             if ($el.find('a').attr('id') !== 't_rc1_0') {
                 return
@@ -403,41 +407,55 @@
                 $(this).append(mbDom)
             })
 
+            // 使用游客状态对当前页可见楼层进行标记
+            await this.lock
+            const checkUrl = $el[0].baseURI
+            if (checkUrl != this.lastCheckUrl) {
+                // 计算理论上当前页第一个楼层
+                let currentPage = $el[0].baseURI.match(/page=([\d]+)/)
+                currentPage = currentPage ? parseInt(currentPage[2]) : 1
+                this.prevVisibleFloor = (currentPage - 1) * 20
+                // 记录当前页游客可见楼层
+                this.visibleFloorNames = []
+                this.lastCheckUrl = checkUrl
+                this.lock = this.requestWithoutAuth(checkUrl)
+                .then(({ success, $html }) => {
+                    if (success) {
+                        // 记录当前页面所有游客能看到的楼层id
+                        for (const floor of $html.find('td.c2')) {
+                            const visibleFloor = $(floor).find('a')[1].name
+                            this.visibleFloorNames.push(visibleFloor)
+                        }
+                    }
+                })
+            }
+            await this.lock
+
+            const currentFloor = parseInt(floorName.slice(1))
             // 检查该页面下登录用户的发言
             if (!isNaN(__CURRENT_UID) && uid === __CURRENT_UID) {
-                // const checkUrl = `${href.split('?')[0]}?${$el[0].baseURI.split('?')[1]}`
-                const checkUrl = $el[0].baseURI
-                // 使用游客状态对当前页可见楼层进行标记
-                await this.lock
-                if (checkUrl != this.lastCheckUrl) {
-                    this.visibleFloorNames = []
-                    this.lastCheckUrl = checkUrl
-                    this.lock = this.requestWithoutAuth(checkUrl)
-                    .then(({ success, $html, error }) => {
-                        if (success) {
-                            // 记录当前页面所有游客能看到的楼层id
-                            for (const floor of $html.find('td.c2')) {
-                                const floorName = $(floor).find('a')[1].name
-                                this.visibleFloorNames.push(floorName)
-                            }
-                        }
-                    })
-                }
-                await this.lock
-                // 对不可见的楼层添加标记
+                // 对不可见的楼层添加标记并提示
                 let mbDom
                 if (!this.visibleFloorNames.includes(floorName)) {
-                    const floor = floorName === 'l0' ? '主楼' : `${floorName.slice(1)}楼`
+                    const floor = floorName === 'l0' ? '主楼' : `${currentFloor}楼`
                     mbDom = '<span class="visibility_text hld_cps_help" help="若该状态持续超过30分钟，请联系版务协助处理" style="color: red; font-weight: bold;"> [不可见] </span>'
                     // this.mainScript.popNotification(`当前页检测到${floor}不可见`, 4000)
-                    script.popNotification(`当前页检测到${floor}不可见`, 4000)
+                    script.popNotification(`当前页检测到${floor}其他人不可见`, 4000)
                 } else {
                     mbDom = '<span class="visibility_text" style="font-weight: bold;"> 可见 </span>'
                 }
                 $el.find('.small_colored_text_btn.block_txt_c2.stxt').each(function () {
                     $(this).append(mbDom)
                 })
+            } else {
+                // 对其他人消失的楼层进行提示
+                
+                while (this.prevVisibleFloor + 1 < currentFloor) {
+                    script.popNotification(`当前页检测到${this.prevVisibleFloor + 1}楼缺失`, 4000)
+                    this.prevVisibleFloor += 1
+                }
             }
+            this.prevVisibleFloor = currentFloor
         },
         /**
          * 游客状态访问
@@ -445,36 +463,79 @@
         requestWithoutAuth(url) {
             // const $ = this.mainScript.libs.$
             const $ = script.libs.$
-            const decoder = new TextDecoder('gbk')
             return new Promise((resolve) => {
-                fetch(url, {
+                GM_xmlhttpRequest({
                     method: 'GET',
-                    credentials: 'omit'
-                })
-                .then(async response => {
-                    if (!response.ok) {
-                        const buffer = await response.arrayBuffer();
-                        throw buffer;
-                    }
-                    return response.arrayBuffer()
-                })
-                .then(buffer => {
-                    const data = decoder.decode(buffer)
-                    const $html = $(data)
-                    resolve({
-                        success: true,
-                        $html: $html
-                    })
-                })
-                .catch(receivedError => {
-                    if (receivedError instanceof ArrayBuffer) {
-                        const errorText = decoder.decode(receivedError)
-                        const message = errorText.match(/<title>([^<]+)<\/title>/)[1]
-                        console.error(message)
-                        resolve({ success: false, error: new Error(message) })
-                    } else {
-                        console.error(receivedError.message)
-                        resolve({ success: false, error: receivedError })
+                    url: url,
+                    anonymous: true,
+                    responseType: 'arraybuffer',
+                    onload: function(response) {
+                        const text = response.response instanceof ArrayBuffer ? new TextDecoder('gbk').decode(response.response) : response.response
+                        
+                        if (response.status === 200) {
+                            resolve({
+                                success: true,
+                                $html: $(text)
+                            })
+                        }
+
+                        // 获取错误信息
+                        let errorCode
+                        let errorMessage
+                        if (response.response instanceof ArrayBuffer) {
+                            errorCode = text.match(/(ERROR:<!--msgcodestart-->([\d]+)<!--msgcodeend-->)/)[2]
+                            errorMessage = text.match(/<title>([^<]+)<\/title>/)[1]
+                        } else {
+                            errorCode = text.match(/(ERROR:<!--msgcodestart-->([\d]+)<!--msgcodeend-->)/)[2]
+                            errorMessage = `(ERROR:${errorCode})`
+                        }
+                        // "(ERROR:15)访客不能直接访问" 进行跳转后可访问
+                        if (errorCode === '15') {
+                            // 跳转所需要用到的游客cookie
+                            const lastvisit = response.responseHeaders.match(/lastvisit=([^;]+)/)[0]
+                            const ngaPassportUid = response.responseHeaders.match(/ngaPassportUid=([^;]+)/)[0]
+                            const guestJs = text.match(/guestJs=([^;]+)/)[0]
+
+                            // 添加随机参数防止缓存
+                            const l = window.location, r = Math.floor(Math.random()*1000), s = (l.search.replace(/(?:\?|&)rand=\d+/,'')+'&rand='+r).replace(/^&/,'?')
+                            const url_ = l.pathname + s
+                            const finalUrl = new URL(url_, url).href
+
+                            // 携带游客cookie后再次访问
+                            GM_xmlhttpRequest({
+                                method: 'GET',
+                                url: finalUrl,
+                                headers: {
+                                  "Cookie": `${lastvisit}; ${ngaPassportUid}; ${guestJs}`,
+                                  'Referer': url
+                                },
+                                anonymous: true,
+                                onload: function(response) {
+                                    if (response.status === 200) {
+                                        resolve({
+                                            success: true,
+                                            $html: $(response.responseText)
+                                        })
+                                    } else {
+                                        const errorCode = text.match(/(ERROR:<!--msgcodestart-->([\d]+)<!--msgcodeend-->)/)[2]
+                                        console.error(`(ERROR:${errorCode})`)
+                                        resolve({ success: false })
+                                    }
+                                },
+                                onerror: function(error) {
+                                    console.error(error)
+                                    resolve({ success: false })
+                                }
+                            })
+                        } else {
+                            console.error(errorMessage)
+                            resolve({ success: false })
+                        }
+                        
+                    },
+                    onerror: function(error) {
+                        console.error(error)
+                        resolve({ success: false })
                     }
                 })
             })
@@ -620,7 +681,7 @@
             const query = keywords[1] === 'pid=0' ? keywords[0] : keywords[1]
             const href = `/read.php?${query}`
 
-            const { success, $html, error } = await this.requestWithoutAuth(href)
+            const { success, $html } = await this.requestWithoutAuth(href)
             const isVisible = success && $html.find('table.forumbox.postbox').length > 0
 
             const record = await this.store.getItem(key)

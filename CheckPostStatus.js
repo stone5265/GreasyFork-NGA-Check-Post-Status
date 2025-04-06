@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NGA检查帖子可见状态
 // @namespace    https://github.com/stone5265/GreasyFork-NGA-Check-Post-Status
-// @version      0.2.4
+// @version      0.2.5
 // @author       stone5265
 // @description  检查自己发布的"主题/回复"别人是否能看见，并且可以关注任意人发布的"主题/回复"可见状态，当不可见时给予提示
 // @license      MIT
@@ -23,6 +23,37 @@
 
 
 (function () {
+    const debounce = (fn, delay = 500) => {
+        let id
+        let pendingPromise
+        let resolvePending
+
+        return (...args) => {
+            clearTimeout(id)
+
+            if (pendingPromise) {
+            resolvePending(new Error("Debounced call cancelled"))
+            }
+
+            pendingPromise = new Promise((resolve) => {
+            resolvePending = resolve
+            });
+
+            id = setTimeout(async () => {
+            try {
+                const result = await fn(...args)
+                resolvePending(result)
+            } catch (err) {
+                resolvePending(err)
+            } finally {
+                pendingPromise = null
+            }
+            }, delay)
+
+            return pendingPromise
+        };
+
+    }
     'use strict';
     const CheckPostStatus = {
         name: 'CheckPostStatus',
@@ -58,7 +89,7 @@
         lastVisibleCheckUrl: '',
         lastMissingCheckUrl: '',
         visibleFloors: new Set(),
-        lock: Promise.resolve(),
+        lock: new Promise(() => {}),
         initFunc() {
             // const $ = this.mainScript.libs.$
             const $ = script.libs.$
@@ -369,6 +400,7 @@
         async renderFormsFunc($el) {
             // const $ = this.mainScript.libs.$
             const $ = script.libs.$
+            const this_ = this
             const checkUrl = document.baseURI
             /**
              * "tid={}(&authorid={})(&page={})"
@@ -524,32 +556,39 @@
                 `
                 $(this).append(mbDom)
             })
-
+            
             // 检查该页面下登录用户的发言
             if (!isNaN(__CURRENT_UID) && uid === __CURRENT_UID) {
                 // (正常区) 使用游客状态对当前页可见楼层进行标记
-                await this.lock
+                const this_ = this
                 if (checkUrl != this.lastVisibleCheckUrl) {
                     this.lastVisibleCheckUrl = checkUrl
-                    this.lock = this.requestWithoutAuth(checkUrl)
-                    .then(({ success, $html }) => {
-                        // 记录当前页游客可见楼层号
-                        this.visibleFloors = new Set()
-                        if (success) {
-                            // 记录当前页面所有游客能看到的楼层号
-                            for (const floor of $html.find('td.c2')) {
-                                const visibleFloor = parseInt($(floor).find('a')[1].name.slice(1))
-                                this.visibleFloors.add(visibleFloor)
+                    const execute = debounce(async () => {
+                        result = this_.requestWithoutAuth(checkUrl)
+                        .then(({ success, $html }) => {
+                            // 记录当前页游客可见楼层号
+                            this_.visibleFloors = new Set()
+                            if (success) {
+                                // 记录当前页面所有游客能看到的楼层号
+                                for (const floor of $html.find('td.c2')) {
+                                    const visibleFloor = parseInt($(floor).find('a')[1].name.slice(1))
+                                    this_.visibleFloors.add(visibleFloor)
+                                }
                             }
-                        }
-                    })
+                        })
+                        return result
+                    }, 1500)
+                    this.lock = execute()
                 }
                 await this.lock
                 // (需要登录才能进的区)
                 // TODO
 
                 // 如果楼层切换的比较快，等这页的游客访问完早已切换到另一页，则放弃对该楼的后续操作
-                if ($(document).find($el).length === 0) return
+                if ($(document).find($el).length === 0) {
+                    // console.log(`抛弃${floorName}`)
+                    return
+                }
 
                 // 对不可见的楼层添加标记并提示
                 let mbDom

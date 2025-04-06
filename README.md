@@ -2,9 +2,9 @@
 
 本脚本基于[NGA优化摸鱼体验](https://github.com/kisshang1993/NGA-BBS-Script)v4.5.4引擎开发，可独立运行
 
-（应该可兼容**NGA优化摸鱼体验**，但没具体测试过，若有冲突后续可能会提供一个**NGA优化摸鱼体验**插件版本）
+同时感谢 https://greasyfork.org/zh-CN/users/263018-snyssss 提供的技术支持
 
-**~~目前仅在 `bbs.nga.cn` 这个域名下能正常工作 （待我研究研究如何解决这个问题）~~(已解决)**
+（应该可兼容**NGA优化摸鱼体验**，但没具体测试过，若有冲突后续可能会提供一个**NGA优化摸鱼体验**插件版本）
 
 **~~支持NGA的三个域名(`nga.178.com` `ngabbs.com` `bbs.nga.cn`)**
 

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NGA检查帖子可见状态
 // @namespace    https://github.com/stone5265/GreasyFork-NGA-Check-Post-Status
-// @version      0.2.0
+// @version      0.2.3
 // @author       stone5265
 // @description  检查自己发布的"主题/回复"别人是否能看见，并且可以关注任意人发布的"主题/回复"可见状态，当不可见时给予提示
 // @license      MIT
@@ -52,9 +52,11 @@
             }
         ],
         store: null,
-        lastCheckUrl: '',
-        prevVisibleFloor: null,
-        visibleFloorNames: [],
+        cacheFid: {},
+        lastWarningTid: -1,
+        lastVisibleCheckUrl: '',
+        lastMissingCheckUrl: '',
+        visibleFloors: new Set(),
         lock: Promise.resolve(),
         initFunc() {
             // const $ = this.mainScript.libs.$
@@ -297,8 +299,8 @@
             })
         },
         // 位于帖子列表页时自动检查关注列表
-        async renderThreadsFunc($el, isFirst=false) {
-            // 位于列表页第一页的第一个帖子时
+        async renderThreadsFunc($el) {
+            // 位于列表页第一页的第一个帖子时才触发自动检查
             if ($el.find('a').attr('id') !== 't_rc1_0') {
                 return
             }
@@ -366,6 +368,7 @@
         async renderFormsFunc($el) {
             // const $ = this.mainScript.libs.$
             const $ = script.libs.$
+            const this_ = this
             /**
              * "tid={}(&authorid={})(&page={})"
              */
@@ -379,12 +382,115 @@
              * "l{}"
              */
             const floorName = $el.find('td.c2').find('a')[1].name
+            const currentFloor = parseInt(floorName.slice(1))
+
+            const checkUrl = document.baseURI
+            
+            // 检查该页面缺失的楼层 (目前账号无法看到的楼层)
+            if (checkUrl != this.lastMissingCheckUrl) {
+                this.lastMissingCheckUrl = checkUrl
+                const currentPage = Math.floor(currentFloor / 20) + 1
+                // 跳过对主楼的检查 (如果看不见其他用户发的主楼, 那这个帖子都不进来)
+                let startFloor = Math.max(1, (currentPage - 1) * 20)
+                let endFloor = currentPage * 20 - 1
+
+                const isLastPage = $(document).find('#m_pbtntop .invert').length === 0 || $(document).find('#m_pbtntop .invert').attr('title') === '最后页'
+                let isReversed = false
+                let prevFloor = -1
+                const currPageFloors = new Set()
+
+                $(document).find('.forumbox .postrow').each((index, dom) => {
+                    const floor = parseInt($(dom).attr('id').split('strow')[1])
+                    // 跳过对主楼的检查
+                    if (floor === 0) return
+                    // 判断该帖子是否是倒序模式
+                    if (!isReversed && (floor < startFloor || floor > startFloor + 19 || floor < prevFloor)) isReversed = true
+                    prevFloor = floor
+                    currPageFloors.add(floor)
+                })
+                
+                // 倒序模式每一页的楼层号范围是在动态变化的, 没办法依靠当前页的信息来获取该页应该存在的楼层号, 可能会有遗漏
+                if (isReversed) {
+                    startFloor = Math.min(...currPageFloors)
+                    endFloor = Math.max(...currPageFloors)
+                }
+
+                // 最后一页也有可能会有遗漏
+                if (isLastPage) {
+                    endFloor = Math.max(...currPageFloors)
+                }
+
+                if (!isReversed) {
+                    // 正序提示
+                    for (let i = Math.max(1, startFloor); i <= endFloor; ++i) {
+                        if (!currPageFloors.has(i)) {
+                            script.popNotification(`当前页检测到${i}楼缺失`, 4000)
+                        }
+                    }
+                } else {
+                    // 倒序提示
+                    for (let i = endFloor; i >= Math.max(1, startFloor); --i) {
+                        if (!currPageFloors.has(i)) {
+                            script.popNotification(`当前页检测到${i}楼缺失`, 4000)
+                        }
+                    }
+                }
+            }
+
             /**
              * "/read.php?tid={}(&authorid={})&page={}#pid{}Anchor"
              */
             const href = `/read.php?${queryString}${queryString.includes('&page=') ? '' : '&page=1'}#${pid}`
-
             const params = this.getUrlParams(href)
+
+            const fid = __CURRENT_FID
+
+            // 缓存该版面是否需要登录才能查看
+            if (this.cacheFid[fid] === undefined) {
+                this.cacheFid[fid] = new Promise((resolve) => {
+                    fetch(`/thread.php?fid=${fid}&lite=js`, {
+                        method: 'GET',
+                        credentials: 'omit'
+                    })
+                    .then((res) => res.blob())
+                    .then((blob) => {
+                        const reader = new FileReader()
+    
+                        reader.onload = () => {
+                            const text = reader.result
+                            const result = JSON.parse(
+                                text.replace("window.script_muti_get_var_store=", "")
+                            )
+        
+                            const { data, error } = result
+        
+                            if (error) {
+                                resolve(error[0])
+                            } else {
+                                resolve('')
+                            }
+                        }
+    
+                        reader.readAsText(blob, "GBK")
+                    })
+                    .catch((err) => {
+                        resolve(err.message)
+                    })
+                })
+            }
+
+            const error = await this.cacheFid[fid]
+
+            // 若该版面需要登录才能访问, 则不支持部分功能
+            if (error === '1:未登录') {
+                // 当前帖子只提示一次
+                if (params['tid'] !== this.lastWarningTid) {
+                    this.lastWarningTid = params['tid']
+                    script.popMsg('该版面需要登陆才能访问，不支持"当前用户发言可见性检查"与"关注按钮"（请期待后续版本更新）', 'warn')
+                }
+                return
+            }
+
             const key = `tid=${params['tid']}&pid=${params['pid']}`
             const watching = await this.store.getItem(key) !== null
 
@@ -395,67 +501,58 @@
                         help="关注该楼层可见状态"
                         data-type="unwatch"
                         data-href="${href}"
-                        data-floor="${floorName.slice(1)}"
+                        data-floor="${currentFloor}"
                         style="${!watching ? '' : 'display: none;'}">⚪</a>
                     <a class="cps__watch_icon hld_cps_help"
                         help="取消关注该楼层可见状态"
                         data-type="watch"
                         data-href="${href}"
-                        data-floor="${floorName.slice(1)}"
+                        data-floor="${currentFloor}"
                         style="${watching ? '' : 'display: none;'}">🔵</a>
                 `
                 $(this).append(mbDom)
             })
 
-            // 使用游客状态对当前页可见楼层进行标记
-            await this.lock
-            const checkUrl = $el[0].baseURI
-            if (checkUrl != this.lastCheckUrl) {
-                // 计算理论上当前页第一个楼层
-                let currentPage = $el[0].baseURI.match(/page=([\d]+)/)
-                currentPage = currentPage ? parseInt(currentPage[2]) : 1
-                this.prevVisibleFloor = (currentPage - 1) * 20
-                // 记录当前页游客可见楼层
-                this.visibleFloorNames = []
-                this.lastCheckUrl = checkUrl
-                this.lock = this.requestWithoutAuth(checkUrl)
-                .then(({ success, $html }) => {
-                    if (success) {
-                        // 记录当前页面所有游客能看到的楼层id
-                        for (const floor of $html.find('td.c2')) {
-                            const visibleFloor = $(floor).find('a')[1].name
-                            this.visibleFloorNames.push(visibleFloor)
-                        }
-                    }
-                })
-            }
-            await this.lock
-
-            const currentFloor = parseInt(floorName.slice(1))
             // 检查该页面下登录用户的发言
             if (!isNaN(__CURRENT_UID) && uid === __CURRENT_UID) {
+                // (正常区) 使用游客状态对当前页可见楼层进行标记
+                await this.lock
+                if (checkUrl != this.lastVisibleCheckUrl) {
+                    this.lastVisibleCheckUrl = checkUrl
+                    this.lock = this.requestWithoutAuth(checkUrl)
+                    .then(({ success, $html }) => {
+                        // 记录当前页游客可见楼层号
+                        this.visibleFloors = new Set()
+                        if (success) {
+                            // 记录当前页面所有游客能看到的楼层号
+                            for (const floor of $html.find('td.c2')) {
+                                const visibleFloor = parseInt($(floor).find('a')[1].name.slice(1))
+                                this.visibleFloors.add(visibleFloor)
+                            }
+                        }
+                    })
+                }
+                await this.lock
+                // (需要登录才能进的区)
+                // TODO
+
+                // 如果楼层切换的比较快，等这页的游客访问完早已切换到另一页，则放弃对该楼的后续操作
+                if ($(document).find($el).length === 0) return
+
                 // 对不可见的楼层添加标记并提示
                 let mbDom
-                if (!this.visibleFloorNames.includes(floorName)) {
-                    const floor = floorName === 'l0' ? '主楼' : `${currentFloor}楼`
+                if (!this.visibleFloors.has(currentFloor)) {
+                    const floorName = currentFloor === 0 ? '主楼' : `${currentFloor}楼`
                     mbDom = '<span class="visibility_text hld_cps_help" help="若该状态持续超过30分钟，请联系版务协助处理" style="color: red; font-weight: bold;"> [不可见] </span>'
                     // this.mainScript.popNotification(`当前页检测到${floor}不可见`, 4000)
-                    script.popNotification(`当前页检测到${floor}其他人不可见`, 4000)
+                    script.popNotification(`当前页检测到${floorName}其他人不可见`, 4000)
                 } else {
                     mbDom = '<span class="visibility_text" style="font-weight: bold;"> 可见 </span>'
                 }
                 $el.find('.small_colored_text_btn.block_txt_c2.stxt').each(function () {
                     $(this).append(mbDom)
                 })
-            } else {
-                // 对其他人消失的楼层进行提示
-                
-                while (this.prevVisibleFloor + 1 < currentFloor) {
-                    script.popNotification(`当前页检测到${this.prevVisibleFloor + 1}楼缺失`, 4000)
-                    this.prevVisibleFloor += 1
-                }
             }
-            this.prevVisibleFloor = currentFloor
         },
         /**
          * 游客状态访问
@@ -799,7 +896,7 @@
          * @method renderThreads
          */
         renderThreads() {
-            $('.topicrow[hld-threads-render!=ok]').each((index, dom) => {
+            $('.topicrow[hld-cps-threads-render!=ok]').each((index, dom) => {
                 const $el = $(dom)
                 for (const module of this.modules) {
                     try {
@@ -809,7 +906,7 @@
                         console.log(error)
                     }
                 }
-                $el.attr('hld-threads-render', 'ok')
+                $el.attr('hld-cps-threads-render', 'ok')
             })
         }
         /**
@@ -817,7 +914,7 @@
          * @method renderForms
          */
         renderForms() {
-            $('.forumbox.postbox[hld-forms-render!=ok]').each((index, dom) => {
+            $('.forumbox.postbox[hld-cps-forms-render!=ok]').each((index, dom) => {
                 const $el = $(dom)
                 // 等待NGA页面渲染完成
                 if ($el.find('.small_colored_text_btn').length == 0) return true
@@ -829,7 +926,7 @@
                         console.log(error)
                     }
                 }
-                $el.attr('hld-forms-render', 'ok')
+                $el.attr('hld-cps-forms-render', 'ok')
             })
         }
         /**
@@ -993,11 +1090,12 @@
          * @param {String} msg 消息内容
          */
         printLog(msg) {
-            console.log(`%cNGA%cScript%c ${msg}`,
-                'background: #222;color: #fff;font-weight:bold;padding:2px 2px 2px 4px;border-radius:4px 0 0 4px;',
-                'background: #fe9a00;color: #000;font-weight:bold;padding:2px 4px 2px 2px;border-radius:0px 4px 4px 0px;',
-                'background:none;color:#000;'
-            )
+            // console.log(`%cNGA%cScript%c ${msg}`,
+            //     'background: #222;color: #fff;font-weight:bold;padding:2px 2px 2px 4px;border-radius:4px 0 0 4px;',
+            //     'background: #fe9a00;color: #000;font-weight:bold;padding:2px 4px 2px 2px;border-radius:0px 4px 4px 0px;',
+            //     'background:none;color:#000;'
+            // )
+            console.log(msg)
         }
         /**
          * 读取值

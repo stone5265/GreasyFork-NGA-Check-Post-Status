@@ -1,15 +1,16 @@
 // ==UserScript==
 // @name         NGA检查帖子可见状态
 // @namespace    https://github.com/stone5265/GreasyFork-NGA-Check-Post-Status
-// @version      0.2.3
+// @version      0.2.4
 // @author       stone5265
 // @description  检查自己发布的"主题/回复"别人是否能看见，并且可以关注任意人发布的"主题/回复"可见状态，当不可见时给予提示
 // @license      MIT
 // @require      https://lf9-cdn-tos.bytecdntp.com/cdn/expire-1-y/localforage/1.10.0/localforage.min.js#sha512=+BMamP0e7wn39JGL8nKAZ3yAQT2dL5oaXWr4ZYlTGkKOaoXM/Yj7c4oy50Ngz5yoUutAG17flueD4F6QpTlPng==
 // @require      https://lf3-cdn-tos.bytecdntp.com/cdn/expire-1-y/jquery/3.4.0/jquery.min.js#sha512=Pa4Jto+LuCGBHy2/POQEbTh0reuoiEXQWXGn8S7aRlhcwpVkO8+4uoZVSOqUjdCsE+77oygfu2Tl+7qGHGIWsw==
-// @match       *://bbs.nga.cn/*
-// @match       *://ngabbs.com/*
-// @match       *://nga.178.com/*
+// @match        *://bbs.nga.cn/*
+// @match        *://ngabbs.com/*
+// @match        *://nga.178.com/*
+// @exclude      */nuke.php*
 // @grant        GM_registerMenuCommand
 // @grant        GM_setValue
 // @grant        GM_getValue
@@ -368,11 +369,11 @@
         async renderFormsFunc($el) {
             // const $ = this.mainScript.libs.$
             const $ = script.libs.$
-            const this_ = this
+            const checkUrl = document.baseURI
             /**
              * "tid={}(&authorid={})(&page={})"
              */
-            const queryString = document.baseURI.split('?')[1]
+            const queryString = checkUrl.split('?')[1]
             const uid = parseInt($el.find('a[name="uid"]').text())
             /**
              * "pid{}Anchor"
@@ -384,41 +385,52 @@
             const floorName = $el.find('td.c2').find('a')[1].name
             const currentFloor = parseInt(floorName.slice(1))
 
-            const checkUrl = document.baseURI
             
             // 检查该页面缺失的楼层 (目前账号无法看到的楼层)
             if (checkUrl != this.lastMissingCheckUrl) {
                 this.lastMissingCheckUrl = checkUrl
-                const currentPage = Math.floor(currentFloor / 20) + 1
-                // 跳过对主楼的检查 (如果看不见其他用户发的主楼, 那这个帖子都不进来)
-                let startFloor = Math.max(1, (currentPage - 1) * 20)
-                let endFloor = currentPage * 20 - 1
-
-                const isLastPage = $(document).find('#m_pbtntop .invert').length === 0 || $(document).find('#m_pbtntop .invert').attr('title') === '最后页'
-                let isReversed = false
-                let prevFloor = -1
+                // 获取当前所在页的页数
+                const currentPageButton = $(document).find('#m_pbtntop .invert')
+                const currentPage = currentPageButton.length ? currentPageButton.val() : 1
+                
+                // 记录当前页目前账号能看到的楼层
                 const currPageFloors = new Set()
-
                 $(document).find('.forumbox .postrow').each((index, dom) => {
                     const floor = parseInt($(dom).attr('id').split('strow')[1])
                     // 跳过对主楼的检查
                     if (floor === 0) return
-                    // 判断该帖子是否是倒序模式
-                    if (!isReversed && (floor < startFloor || floor > startFloor + 19 || floor < prevFloor)) isReversed = true
-                    prevFloor = floor
                     currPageFloors.add(floor)
                 })
-                
-                // 倒序模式每一页的楼层号范围是在动态变化的, 没办法依靠当前页的信息来获取该页应该存在的楼层号, 可能会有遗漏
-                if (isReversed) {
-                    startFloor = Math.min(...currPageFloors)
-                    endFloor = Math.max(...currPageFloors)
-                }
 
-                // 最后一页也有可能会有遗漏
-                if (isLastPage) {
-                    endFloor = Math.max(...currPageFloors)
+                // 跳过对主楼的检查 (如果看不见其他用户发的主楼, 那都不进来这个帖子)
+                let startFloor = Math.max(1, (currentPage - 1) * 20)
+                let endFloor = currentPage * 20 - 1
+                
+                // 获取该贴回帖数
+                const maxFloor = commonui.postArg.def.tReplies
+                // 阻断最后一页的截止楼层号
+                endFloor = Math.min(maxFloor, endFloor)
+                
+                // 判断该帖是否是倒序模式
+                const isReversed = commonui.postArg.def.tmBit1 & 262144
+                
+                // 倒序模式通过模拟来计算当前页楼层号的范围
+                if (isReversed) {
+                    // 第一页跳过主楼
+                    let iPage = 1
+                    endFloor = maxFloor
+                    startFloor = maxFloor - 19
+                    // 第二页到当前页
+                    ++iPage
+                    while (iPage <= currentPage) {
+                        endFloor -= 20
+                        startFloor -= 20
+                        ++iPage
+                    }
+                    // 截断最后一页的开始楼号
+                    startFloor = Math.max(1, startFloor)
                 }
+                
 
                 if (!isReversed) {
                     // 正序提示

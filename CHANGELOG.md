@@ -82,3 +82,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 修复“当前页被吞的其他人楼层的消息提示”
 
 - 修复部分与`NGA优化摸鱼体验`的兼容性冲突
+
+
+## [0.2.4] - 2025-04-06
+
+### Changed
+
+- “当前页被吞的其他人楼层的消息提示”在倒序模式以及最后一页可以精确提示 ( 感谢 https://greasyfork.org/zh-CN/users/263018-snyssss )
+
+- 修正左上角的"提醒信息"弹窗出来时，会多运行一个脚本的问题

@@ -98,3 +98,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - "检查当前页面登录用户发言可见性"的防抖机制
+
+
+## [0.2.6] - 2025-04-07
+
+### Changed
+
+- 修正"关注列表"中的"检查"均为不可见问题

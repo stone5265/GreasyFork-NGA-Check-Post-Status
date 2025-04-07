@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NGA检查帖子可见状态
 // @namespace    https://github.com/stone5265/GreasyFork-NGA-Check-Post-Status
-// @version      0.2.5
+// @version      0.2.6
 // @author       stone5265
 // @description  检查自己发布的"主题/回复"别人是否能看见，并且可以关注任意人发布的"主题/回复"可见状态，当不可见时给予提示
 // @license      MIT
@@ -20,7 +20,6 @@
 // @grant        unsafeWindow
 // @inject-into  content
 // ==/UserScript==
-
 
 (function () {
     const debounce = (fn, delay = 500) => {
@@ -103,8 +102,8 @@
             this.store.iterate((record, key) => {
                 const isPermanent = record.expireTime === -1
                 if (!isPermanent && currentTime >= record.expireTime) {
-                    expireDays = Math.floor((record.expireTime - currentTime) / 60 / 60 / 12)
-                    isAutoDelete = script.setting.advanced.autoDeleteAfterDays >= 0
+                    const expireDays = Math.floor((record.expireTime - currentTime) / 60 / 60 / 12)
+                    const isAutoDelete = script.setting.advanced.autoDeleteAfterDays >= 0
                     if (isAutoDelete && expireDays >= script.setting.advanced.autoDeleteAfterDays) {
                         this_.store.removeItem(key)
                         removedCount += 1
@@ -137,7 +136,7 @@
 
                 if (type === 'unwatch') {
                     // 添加关注
-                    const isPermanent = script.setting.advanced.expireDays  < 0
+                    const isPermanent = script.setting.advanced.expireDays < 0
                     const expireTime = isPermanent ? -1 : Math.floor(Date.now() / 1000) + script.setting.advanced.expireDays * 24 * 60 * 60
                     this_.store.setItem(key, {
                         topicName: document.title.replace(/\sNGA玩家社区/g, ''),
@@ -417,14 +416,13 @@
             const floorName = $el.find('td.c2').find('a')[1].name
             const currentFloor = parseInt(floorName.slice(1))
 
-            
             // 检查该页面缺失的楼层 (目前账号无法看到的楼层)
             if (checkUrl != this.lastMissingCheckUrl) {
                 this.lastMissingCheckUrl = checkUrl
                 // 获取当前所在页的页数
                 const currentPageButton = $(document).find('#m_pbtntop .invert')
                 const currentPage = currentPageButton.length ? currentPageButton.val() : 1
-                
+
                 // 记录当前页目前账号能看到的楼层
                 const currPageFloors = new Set()
                 $(document).find('.forumbox .postrow').each((index, dom) => {
@@ -437,15 +435,15 @@
                 // 跳过对主楼的检查 (如果看不见其他用户发的主楼, 那都不进来这个帖子)
                 let startFloor = Math.max(1, (currentPage - 1) * 20)
                 let endFloor = currentPage * 20 - 1
-                
+
                 // 获取该贴回帖数
                 const maxFloor = commonui.postArg.def.tReplies
                 // 阻断最后一页的截止楼层号
                 endFloor = Math.min(maxFloor, endFloor)
-                
+
                 // 判断该帖是否是倒序模式
                 const isReversed = commonui.postArg.def.tmBit1 & 262144
-                
+
                 // 倒序模式通过模拟来计算当前页楼层号的范围
                 if (isReversed) {
                     // 第一页跳过主楼
@@ -462,7 +460,6 @@
                     // 截断最后一页的开始楼号
                     startFloor = Math.max(1, startFloor)
                 }
-                
 
                 if (!isReversed) {
                     // 正序提示
@@ -499,22 +496,22 @@
                     .then((res) => res.blob())
                     .then((blob) => {
                         const reader = new FileReader()
-    
+
                         reader.onload = () => {
                             const text = reader.result
                             const result = JSON.parse(
                                 text.replace("window.script_muti_get_var_store=", "")
                             )
-        
+
                             const { data, error } = result
-        
+
                             if (error) {
                                 resolve(error[0])
                             } else {
                                 resolve('')
                             }
                         }
-    
+
                         reader.readAsText(blob, "GBK")
                     })
                     .catch((err) => {
@@ -556,7 +553,7 @@
                 `
                 $(this).append(mbDom)
             })
-            
+
             // 检查该页面下登录用户的发言
             if (!isNaN(__CURRENT_UID) && uid === __CURRENT_UID) {
                 // (正常区) 使用游客状态对当前页可见楼层进行标记
@@ -564,7 +561,7 @@
                 if (checkUrl != this.lastVisibleCheckUrl) {
                     this.lastVisibleCheckUrl = checkUrl
                     const execute = debounce(async () => {
-                        result = this_.requestWithoutAuth(checkUrl)
+                        const result = this_.requestWithoutAuth(checkUrl)
                         .then(({ success, $html }) => {
                             // 记录当前页游客可见楼层号
                             this_.visibleFloors = new Set()
@@ -645,17 +642,16 @@
                             const guestJs = text.match(/guestJs=([^;]+)/)[0]
 
                             // 添加随机参数防止缓存
-                            const l = window.location, r = Math.floor(Math.random()*1000), s = (l.search.replace(/(?:\?|&)rand=\d+/,'')+'&rand='+r).replace(/^&/,'?')
-                            const url_ = l.pathname + s
-                            const finalUrl = new URL(url_, url).href
+                            const r = Math.floor(Math.random()*1000)
+                            const finalUrl = response.finalUrl.replace(/(?:\?|&)rand=\d+/,'')+'&rand=' + r
 
                             // 携带游客cookie后再次访问
                             GM_xmlhttpRequest({
                                 method: 'GET',
                                 url: finalUrl,
                                 headers: {
-                                  "Cookie": `${lastvisit}; ${ngaPassportUid}; ${guestJs}`,
-                                  'Referer': url
+                                  "Cookie": `${lastvisit}; lastpath=0; ${ngaPassportUid}; ${guestJs}`,
+                                  'Referer': response.finalUrl
                                 },
                                 anonymous: true,
                                 onload: function(response) {

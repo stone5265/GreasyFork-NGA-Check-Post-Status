@@ -6,7 +6,7 @@
 
 （应该可兼容**NGA优化摸鱼体验**，但没具体测试过，若有冲突后续可能会提供一个**NGA优化摸鱼体验**插件版本）
 
-**~~支持NGA的三个域名(`nga.178.com` `ngabbs.com` `bbs.nga.cn`)**
+**支持NGA的三个域名(`nga.178.com` `ngabbs.com` `bbs.nga.cn`)**
 
 ## 功能
 

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NGA检查帖子可见状态
 // @namespace    https://github.com/stone5265/GreasyFork-NGA-Check-Post-Status
-// @version      0.2.6
+// @version      0.2.7
 // @author       stone5265
 // @description  检查自己发布的"主题/回复"别人是否能看见，并且可以关注任意人发布的"主题/回复"可见状态，当不可见时给予提示
 // @license      MIT
@@ -449,7 +449,7 @@
                     // 第一页跳过主楼
                     let iPage = 1
                     endFloor = maxFloor
-                    startFloor = maxFloor - 19
+                    startFloor = maxFloor - 18
                     // 第二页到当前页
                     ++iPage
                     while (iPage <= currentPage) {

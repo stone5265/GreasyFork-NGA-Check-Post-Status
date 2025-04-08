@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NGA检查帖子可见状态
 // @namespace    https://github.com/stone5265/GreasyFork-NGA-Check-Post-Status
-// @version      0.3.0
+// @version      0.3.1
 // @author       stone5265
 // @description  检查自己发布的"主题/回复"别人是否能看见，并且可以关注任意人发布的"主题/回复"可见状态，当不可见时给予提示
 // @license      MIT
@@ -681,7 +681,11 @@
             const maxFloor = commonui.postArg.def.tReplies
             // 获取当前所在页的页数 (注: 使用  __PAGE[2] 获取的当前页数 在点击"加载下一页"按钮时 获取的还是当前页而非新加载出来的一页的页数)
             const pageMatch = checkUrl.match(/page=([\d]+)/)
-            const currentPage = pageMatch ? parseInt(pageMatch[1]) : 1
+            let currentPage = pageMatch ? parseInt(pageMatch[1]) : 1
+            // 正序模式回帖或者编辑, 前者page=e, 后者不会出现page=
+            if (!pageMatch && __PAGE !== undefined) {
+                currentPage = __PAGE[2]
+            }
             // 是否为最后一页
             const isLastPage = pageMatch ? currentPage === __PAGE[1] : true
             // 该页开始楼层号

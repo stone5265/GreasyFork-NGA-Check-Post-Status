@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.3.0] - 2025-04-08
+
+### Changed
+
+- "检查当前页面登录用户发言可见性"支持需要登录的版面
+
+- 修复"检查当前页面缺失的楼层"在只看作者模式下的异常表现 (不支持倒序帖子的只看作者模式)
+
+- 修复"检查当前页面缺失的楼层"在点击"加载下一页"按钮时，检查的还是当前页而非加载出来的下一页的问题
+
+
 ## [0.2.7] - 2025-04-07
 
 ### Changed

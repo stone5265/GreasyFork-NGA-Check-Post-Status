@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NGA检查帖子可见状态
 // @namespace    https://github.com/stone5265/GreasyFork-NGA-Check-Post-Status
-// @version      0.2.7
+// @version      0.3.0
 // @author       stone5265
 // @description  检查自己发布的"主题/回复"别人是否能看见，并且可以关注任意人发布的"主题/回复"可见状态，当不可见时给予提示
 // @license      MIT
@@ -89,6 +89,7 @@
         lastMissingCheckUrl: '',
         visibleFloors: new Set(),
         lock: new Promise(() => {}),
+        locks: new Array(20).fill(new Promise(() => {})),
         initFunc() {
             // const $ = this.mainScript.libs.$
             const $ = script.libs.$
@@ -399,8 +400,11 @@
         async renderFormsFunc($el) {
             // const $ = this.mainScript.libs.$
             const $ = script.libs.$
-            const this_ = this
             const checkUrl = document.baseURI
+
+            // 检查该页面缺失的楼层 (目前账号无法看到的楼层)
+            this.checkMissingFloors(checkUrl)
+
             /**
              * "tid={}(&authorid={})(&page={})"
              */
@@ -416,171 +420,146 @@
             const floorName = $el.find('td.c2').find('a')[1].name
             const currentFloor = parseInt(floorName.slice(1))
 
-            // 检查该页面缺失的楼层 (目前账号无法看到的楼层)
-            if (checkUrl != this.lastMissingCheckUrl) {
-                this.lastMissingCheckUrl = checkUrl
-                // 获取当前所在页的页数
-                const currentPageButton = $(document).find('#m_pbtntop .invert')
-                const currentPage = currentPageButton.length ? currentPageButton.val() : 1
-
-                // 记录当前页目前账号能看到的楼层
-                const currPageFloors = new Set()
-                $(document).find('.forumbox .postrow').each((index, dom) => {
-                    const floor = parseInt($(dom).attr('id').split('strow')[1])
-                    // 跳过对主楼的检查
-                    if (floor === 0) return
-                    currPageFloors.add(floor)
-                })
-
-                // 跳过对主楼的检查 (如果看不见其他用户发的主楼, 那都不进来这个帖子)
-                let startFloor = Math.max(1, (currentPage - 1) * 20)
-                let endFloor = currentPage * 20 - 1
-
-                // 获取该贴回帖数
-                const maxFloor = commonui.postArg.def.tReplies
-                // 阻断最后一页的截止楼层号
-                endFloor = Math.min(maxFloor, endFloor)
-
-                // 判断该帖是否是倒序模式
-                const isReversed = commonui.postArg.def.tmBit1 & 262144
-
-                // 倒序模式通过模拟来计算当前页楼层号的范围
-                if (isReversed) {
-                    // 第一页跳过主楼
-                    let iPage = 1
-                    endFloor = maxFloor
-                    startFloor = maxFloor - 18
-                    // 第二页到当前页
-                    ++iPage
-                    while (iPage <= currentPage) {
-                        endFloor -= 20
-                        startFloor -= 20
-                        ++iPage
-                    }
-                    // 截断最后一页的开始楼号
-                    startFloor = Math.max(1, startFloor)
-                }
-
-                if (!isReversed) {
-                    // 正序提示
-                    for (let i = Math.max(1, startFloor); i <= endFloor; ++i) {
-                        if (!currPageFloors.has(i)) {
-                            script.popNotification(`当前页检测到${i}楼缺失`, 4000)
-                        }
-                    }
-                } else {
-                    // 倒序提示
-                    for (let i = endFloor; i >= Math.max(1, startFloor); --i) {
-                        if (!currPageFloors.has(i)) {
-                            script.popNotification(`当前页检测到${i}楼缺失`, 4000)
-                        }
-                    }
-                }
-            }
-
             /**
              * "/read.php?tid={}(&authorid={})&page={}#pid{}Anchor"
              */
             const href = `/read.php?${queryString}${queryString.includes('&page=') ? '' : '&page=1'}#${pid}`
             const params = this.getUrlParams(href)
 
-            const fid = __CURRENT_FID
-
-            // 缓存该版面是否需要登录才能查看
-            if (this.cacheFid[fid] === undefined) {
-                this.cacheFid[fid] = new Promise((resolve) => {
-                    fetch(`/thread.php?fid=${fid}&lite=js`, {
-                        method: 'GET',
-                        credentials: 'omit'
-                    })
-                    .then((res) => res.blob())
-                    .then((blob) => {
-                        const reader = new FileReader()
-
-                        reader.onload = () => {
-                            const text = reader.result
-                            const result = JSON.parse(
-                                text.replace("window.script_muti_get_var_store=", "")
-                            )
-
-                            const { data, error } = result
-
-                            if (error) {
-                                resolve(error[0])
-                            } else {
-                                resolve('')
-                            }
-                        }
-
-                        reader.readAsText(blob, "GBK")
-                    })
-                    .catch((err) => {
-                        resolve(err.message)
-                    })
-                })
-            }
-
-            const error = await this.cacheFid[fid]
+            // 检查该版面是否需要登录才能查看
+            const isLimit = await this.checkFidLimit(__CURRENT_FID)
 
             // 若该版面需要登录才能访问, 则不支持部分功能
-            if (error === '1:未登录') {
+            if (isLimit) {
                 // 当前帖子只提示一次
                 if (params['tid'] !== this.lastWarningTid) {
                     this.lastWarningTid = params['tid']
-                    script.popMsg('该版面需要登陆才能访问，不支持"当前用户发言可见性检查"与"关注按钮"（请期待后续版本更新）', 'warn')
+                    script.popMsg('该版面需要登陆才能访问，不支持[关注按钮]', 'warn')
                 }
-                return
+                // return
             }
 
-            const key = `tid=${params['tid']}&pid=${params['pid']}`
-            const watching = await this.store.getItem(key) !== null
-
             // 添加"关注该楼层可见状态"按钮
-            $el.find('.small_colored_text_btn.block_txt_c2.stxt').each(function () {
-                const mbDom = `
-                    <a class="cps__watch_icon hld_cps_help"
-                        help="关注该楼层可见状态"
-                        data-type="unwatch"
-                        data-href="${href}"
-                        data-floor="${currentFloor}"
-                        style="${!watching ? '' : 'display: none;'}">⚪</a>
-                    <a class="cps__watch_icon hld_cps_help"
-                        help="取消关注该楼层可见状态"
-                        data-type="watch"
-                        data-href="${href}"
-                        data-floor="${currentFloor}"
-                        style="${watching ? '' : 'display: none;'}">🔵</a>
-                `
-                $(this).append(mbDom)
-            })
+            if (!isLimit) {
+                const key = `tid=${params['tid']}&pid=${params['pid']}`
+                const watching = await this.store.getItem(key) !== null
+
+                $el.find('.small_colored_text_btn.block_txt_c2.stxt').each(function () {
+                    const mbDom = `
+                        <a class="cps__watch_icon hld_cps_help"
+                            help="关注该楼层可见状态"
+                            data-type="unwatch"
+                            data-href="${href}"
+                            data-floor="${currentFloor}"
+                            style="${!watching ? '' : 'display: none;'}">⚪</a>
+                        <a class="cps__watch_icon hld_cps_help"
+                            help="取消关注该楼层可见状态"
+                            data-type="watch"
+                            data-href="${href}"
+                            data-floor="${currentFloor}"
+                            style="${watching ? '' : 'display: none;'}">🔵</a>
+                    `
+                    $(this).append(mbDom)
+                })
+            }
+            
 
             // 检查该页面下登录用户的发言
             if (!isNaN(__CURRENT_UID) && uid === __CURRENT_UID) {
-                // (正常区) 使用游客状态对当前页可见楼层进行标记
                 const this_ = this
-                if (checkUrl != this.lastVisibleCheckUrl) {
-                    this.lastVisibleCheckUrl = checkUrl
-                    const execute = debounce(async () => {
-                        const result = this_.requestWithoutAuth(checkUrl)
-                        .then(({ success, $html }) => {
-                            // 记录当前页游客可见楼层号
-                            this_.visibleFloors = new Set()
-                            if (success) {
-                                // 记录当前页面所有游客能看到的楼层号
-                                for (const floor of $html.find('td.c2')) {
-                                    const visibleFloor = parseInt($(floor).find('a')[1].name.slice(1))
-                                    this_.visibleFloors.add(visibleFloor)
+                if (!isLimit) {
+                    // (正常区) 使用游客状态对当前页可见楼层进行标记
+                    if (checkUrl !== this.lastVisibleCheckUrl) {
+                        this.lastVisibleCheckUrl = checkUrl
+                        // 记录当前页游客可见楼层号
+                        this.visibleFloors = new Set()
+                        const execute = debounce(async () => {
+                            const result = this_.requestWithoutAuth(checkUrl)
+                            .then(({ success, $html }) => {
+                                if (success) {
+                                    // 记录当前页面所有游客能看到的楼层号
+                                    for (const floor of $html.find('td.c2')) {
+                                        const visibleFloor = parseInt($(floor).find('a')[1].name.slice(1))
+                                        this_.visibleFloors.add(visibleFloor)
+                                    }
                                 }
-                            }
+                            })
+                            return result
+                        }, 1500)
+                        this.lock = execute()
+                    }
+                    await this.lock
+                } else {
+                    // (需要登录才能进的区) 单独向每个属于登录用户的楼层发送一条编辑请求
+                    if (checkUrl !== this.lastVisibleCheckUrl) {
+                        this.lastVisibleCheckUrl = checkUrl
+                        this.visibleFloors = new Set()
+                        this.locks = Array(20).fill().map(() => {
+                            let resolveFn
+                            const promise = new Promise(resolve => resolveFn = resolve)
+                            return { promise, resolveFn }
                         })
-                        return result
-                    }, 1500)
-                    this.lock = execute()
-                }
-                await this.lock
-                // (需要登录才能进的区)
-                // TODO
 
+                        const floors = Object.keys(commonui.postArg.data)
+                        for (let floor of floors) {
+                            if (isNaN(floor)) continue
+                            floor = parseInt(floor)
+                            // 如果处理完已经切换到其他页面, 则放弃对该页的后续操作
+                            if (!(floor in commonui.postArg.data)) {
+                                this.locks.forEach(lock => lock.resolveFn())
+                                return
+                            }
+                            const data = commonui.postArg.data[floor]
+                            if (parseInt(data.pAid, 10) !== __CURRENT_UID) continue
+                            const { success } = await new Promise((resolve) => {
+                                fetch(`/post.php?lite=js&action=modify&tid=${data.tid}&pid=${data.pid}`)
+                                .then((res) => res.blob())
+                                .then((blob) => {
+                                const reader = new FileReader()
+                
+                                reader.onload = () => {
+                                    const text = reader.result;
+                                    const result = JSON.parse(
+                                        text.replace("window.script_muti_get_var_store=", "")
+                                    )
+                
+                                    const { data, error } = result
+                
+                                    if (error) {
+                                        // resolve(error[0])
+                                        resolve({ success: false })
+                                        return
+                                    }
+                
+                                    if (data && data['post_type'] & 2) {
+                                        // resolve('只有作者/版主可见')
+                                        resolve({ success: false })
+                                        return
+                                    }
+                
+                                    resolve({ success: true })
+                                }
+                
+                                reader.readAsText(blob, "GBK")
+                                })
+                                .catch(() => {
+                                    // resolve("")
+                                    resolve({ success: false })
+                                })
+                            })
+                            if (success) {
+                                this.visibleFloors.add(floor)
+                            }
+                            this.locks[floor % 20].resolveFn()
+                            await new Promise(resolve => setTimeout(resolve, 500))
+                        }
+                    }
+                    
+                    await this.locks[currentFloor % 20].promise
+                }
+
+                const isVisible = this.visibleFloors.has(currentFloor)
+                
                 // 如果楼层切换的比较快，等这页的游客访问完早已切换到另一页，则放弃对该楼的后续操作
                 if ($(document).find($el).length === 0) {
                     // console.log(`抛弃${floorName}`)
@@ -589,7 +568,7 @@
 
                 // 对不可见的楼层添加标记并提示
                 let mbDom
-                if (!this.visibleFloors.has(currentFloor)) {
+                if (!isVisible) {
                     const floorName = currentFloor === 0 ? '主楼' : `${currentFloor}楼`
                     mbDom = '<span class="visibility_text hld_cps_help" help="若该状态持续超过30分钟，请联系版务协助处理" style="color: red; font-weight: bold;"> [不可见] </span>'
                     // this.mainScript.popNotification(`当前页检测到${floor}不可见`, 4000)
@@ -683,6 +662,137 @@
                     }
                 })
             })
+        },
+        /**
+         * 检查该页面缺失的楼层 (目前账号无法看到的楼层)
+         * @method checkMissingFloors
+         * @param {string} checkUrl 
+         * @returns 
+         */
+        checkMissingFloors(checkUrl) {
+            const $ = script.libs.$
+            if ((checkUrl === this.lastMissingCheckUrl)) return
+            this.lastMissingCheckUrl = checkUrl
+            // 倒序模式
+            const isReversed = commonui.postArg.def.tmBit1 & 262144
+            // 只看作者模式
+            const isOnlyAuthor = checkUrl.match(/authorid=/) !== null
+            // 该贴总回帖数
+            const maxFloor = commonui.postArg.def.tReplies
+            // 获取当前所在页的页数 (注: 使用  __PAGE[2] 获取的当前页数 在点击"加载下一页"按钮时 获取的还是当前页而非新加载出来的一页的页数)
+            const pageMatch = checkUrl.match(/page=([\d]+)/)
+            const currentPage = pageMatch ? parseInt(pageMatch[1]) : 1
+            // 是否为最后一页
+            const isLastPage = pageMatch ? currentPage === __PAGE[1] : true
+            // 该页开始楼层号
+            let startFloor
+            // 该页截止楼层号
+            let endFloor
+            // 记录当前页目前账号能看到的楼层
+            const currPageFloors = new Set()
+            $(document).find('.forumbox .postrow').each((index, dom) => {
+                const floor = parseInt($(dom).attr('id').split('strow')[1])
+                currPageFloors.add(floor)
+            })
+            
+            if (isOnlyAuthor) {
+                // 不支持倒序模式下的只看作者
+                if (isReversed) {
+                    script.popMsg('[检查缺失楼层]不支持倒序模式下的只看作者', 'warn')
+                    return
+                }
+                // 只看作者模式的最后一页只能使用该页能看到的楼层中最大楼层号
+                if (isLastPage) {
+                    startFloor = Math.max(1, (currentPage - 1) * 20)
+                    endFloor = Math.max(...currPageFloors)
+                }
+            }
+            else {
+                if (!isReversed) {
+                    // 正序模式通过该页页数来计算范围 (并对其进行阻断来保证最后一页范围计算正确)
+                    startFloor = Math.max(1, (currentPage - 1) * 20)
+                    endFloor = Math.min(maxFloor, currentPage * 20 - 1)
+                } else {
+                    // 倒序模式通过模拟来计算当前页楼层号的范围
+                    // 第一页跳过主楼
+                    let iPage = 1
+                    endFloor = maxFloor
+                    startFloor = endFloor - 18
+                    // 第二页到当前页
+                    ++iPage
+                    while (iPage <= currentPage) {
+                        endFloor -= 20
+                        startFloor -= 20
+                        ++iPage
+                    }
+                    // 截断最后一页的开始楼号
+                    startFloor = Math.max(1, startFloor)
+                }
+            }
+
+            // 主楼检查 (用于只看作者模式)
+            if (currentPage === 1 && !currPageFloors.has(0)) {
+                script.popNotification(`当前页检测到0楼缺失`, 4000)
+            }
+
+            if (!isReversed) {
+                // 正序提示
+                for (let i = Math.max(1, startFloor); i <= Math.min(maxFloor, endFloor); ++i) {
+                    if (!currPageFloors.has(i)) {
+                        script.popNotification(`当前页检测到${i}楼缺失`, 4000)
+                    }
+                }
+            } else {
+                // 倒序提示
+                for (let i = Math.min(maxFloor, endFloor); i >= Math.max(1, startFloor); --i) {
+                    if (!currPageFloors.has(i)) {
+                        script.popNotification(`当前页检测到${i}楼缺失`, 4000)
+                    }
+                }
+            }
+        },
+        /**
+         * 检查该版面是否需要登录才能查看
+         * @method checkFidLimit
+         * @param {number} fid 
+         */
+        async checkFidLimit(fid) {
+            // 对版面限制进行缓存
+            if (this.cacheFid[fid] === undefined) {
+                this.cacheFid[fid] = new Promise((resolve) => {
+                    fetch(`/thread.php?fid=${fid}&lite=js`, {
+                        method: 'GET',
+                        credentials: 'omit'
+                    })
+                    .then((res) => res.blob())
+                    .then((blob) => {
+                        const reader = new FileReader()
+
+                        reader.onload = () => {
+                            const text = reader.result
+                            const result = JSON.parse(
+                                text.replace("window.script_muti_get_var_store=", "")
+                            )
+
+                            const { data, error } = result
+
+                            if (error) {
+                                resolve(error[0])
+                            } else {
+                                resolve('')
+                            }
+                        }
+
+                        reader.readAsText(blob, "GBK")
+                    })
+                    .catch((err) => {
+                        resolve(err.message)
+                    })
+                })
+            }
+
+            const error = await this.cacheFid[fid]
+            return error === '1:未登录'
         },
         /**
          * 获取URL参数对象

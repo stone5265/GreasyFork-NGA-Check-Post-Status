@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.4.0] - 2025-05-29
+
+### Changed
+
+- 修正游综会多运行一个脚本的问题 (`@exclude */misc/*` 游综游戏评分)
+
+- 降低`部分功能不可用提示`频率 (由 每个帖子提示一次 降低为 每个版面提醒一次)
+
+- `自动检查`修正时间间隔
+
+- `自动检查`添加开始提示提示
+
+- `设置面板`合并至`关注列表`
+
+- `关注列表`添加`自动检查信息` (是否开启 | 检查间隔 | 上次自动检查时间)
+
+- `设置面板`添加`自动检查开关`
+
+
 ## [0.3.1] - 2025-04-08
 
 ### Changed

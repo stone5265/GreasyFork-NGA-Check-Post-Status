@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         NGA检查帖子可见状态
 // @namespace    https://github.com/stone5265/GreasyFork-NGA-Check-Post-Status
-// @version      0.4.0
+// @version      0.4.1
 // @author       stone5265
-// @description  检查自己发布的"主题/回复"别人是否能看见，并且可以关注任意人发布的"主题/回复"可见状态，当不可见时给予提示
+// @description  不可见楼层提醒 与 可见状态关注列表
 // @license      MIT
 // @require      https://lf9-cdn-tos.bytecdntp.com/cdn/expire-1-y/localforage/1.10.0/localforage.min.js#sha512=+BMamP0e7wn39JGL8nKAZ3yAQT2dL5oaXWr4ZYlTGkKOaoXM/Yj7c4oy50Ngz5yoUutAG17flueD4F6QpTlPng==
 // @require      https://lf3-cdn-tos.bytecdntp.com/cdn/expire-1-y/jquery/3.4.0/jquery.min.js#sha512=Pa4Jto+LuCGBHy2/POQEbTh0reuoiEXQWXGn8S7aRlhcwpVkO8+4uoZVSOqUjdCsE+77oygfu2Tl+7qGHGIWsw==
@@ -284,7 +284,7 @@
             })
 
             // 关注列表
-            GM_registerMenuCommand('关注列表', async function () {
+            GM_registerMenuCommand('关注列表', function () {
                 if($('#cps__watchlist_panel').length > 0) return
                 
                 $('body').append(`
@@ -310,12 +310,12 @@
                                     <table class="cps__table">
                                         <thead>
                                             <tr>
-                                                <th width=55%>主题</th>
-                                                <th width=5%>楼层</th>
-                                                <th width=5%>状态</th>
-                                                <th width=5%>上次检查</th>
-                                                <th width=5%>剩余时间</th>
-                                                <th width=25%>操作</th>
+                                                <th style="text-align:left;">主题</th>
+                                                <th width=90px>楼层</th>
+                                                <th width=50px>状态</th>
+                                                <th width=75px>上次检查</th>
+                                                <th width=75px>剩余时间</th>
+                                                <th width=220px>操作</th>
                                             </tr>
                                         </thead>
                                         <tbody id="cps__watchlist"></tbody>
@@ -328,19 +328,19 @@
                             <div class="cps__list-c">
                                 <button class="cps__panel-refresh hld_cps_help" help="手动刷新列表的时间显示">刷新</button>
                                 <button disabled class="cps__panel-checkall" style="opacity: 0.6; cursor: not-allowed;">检查所有</button>
-                                <button class="cps__panel-clean-expired hld_cps_help" help="过期超过${script.setting.advanced.autoDeleteAfterDays}天会自动删除">清除过期关注</button>
+                                <button class="cps__panel-clean-expired hld_cps_help" help="过期超过一定时间(*设置面板*中可设置)会自动删除">清除过期关注</button>
                                 <button disabled class="cps__panel-clean-all" style="opacity: 0.6; cursor: not-allowed;">清空*所有*关注</button>
 
                                 <div class="cps__scroll-area">
                                     <table class="cps__table">
                                         <thead>
                                             <tr>
-                                                <th width=55%>主题</th>
-                                                <th width=5%>楼层</th>
-                                                <th width=5%>状态</th>
-                                                <th width=5%>上次检查</th>
-                                                <th width=5%>剩余时间</th>
-                                                <th width=25%>操作</th>
+                                                <th style="text-align:left;">主题</th>
+                                                <th width=90px>楼层</th>
+                                                <th width=50px>状态</th>
+                                                <th width=75px>上次检查</th>
+                                                <th width=75px>剩余时间</th>
+                                                <th width=220px>操作</th>
                                             </tr>
                                         </thead>
                                         <tbody id="cps__watchlist-invisible"></tbody>
@@ -416,10 +416,11 @@
         async renderFormsFunc($el) {
             const $ = script.libs.$
             const this_ = this
-            const checkUrl = document.baseURI
+            // 去除 #后的内容 比如 (/read.php?tid=xxx&page=1#pidxxxxAnchor 去掉#pidxxxxAnchor)
+            const checkUrl = document.baseURI.split('#')[0]
 
             // 检查检查详细页缺失的楼层 (目前账号无法看到的楼层)
-            this.checkMissingFloors(document.baseURI)
+            this.checkMissingFloors(checkUrl)
 
             /**
              * "tid={}(&authorid={})(&page={})"
@@ -938,7 +939,7 @@
                     } else {
                         timeSinceLastCheck = '超过1天'
                     }
-                    visibleStatus = record.isVisible ? '可见' : '<p style="color: red; font-weight: bold;">不可见</p>'
+                    visibleStatus = record.isVisible ? '可见' : '<span style="color: red; font-weight: bold;">不可见</span>'
                 } else {
                     timeSinceLastCheck = '-'
                     visibleStatus = '-'
@@ -950,8 +951,8 @@
                 const href = `/read.php?${query}&opt=128`
                 const context = `
                 <tr>
-                    <td title="${record.topicName}">${record.topicName}</td>
-                    <td title="${floor}"><a href="${href}" class="urlincontent">${floor}</a></td>
+                    <td style="text-align:left;" title="${record.topicName}">${record.topicName}</td>
+                    <td title="${href}"><a href="${href}" class="urlincontent">${floor}</a></td>
                     <td>${visibleStatus}</td>
                     <td title="${timeSinceLastCheck}">${timeSinceLastCheck}</td>
                     <td title="${timeLeft}">${timeLeft}</td>
@@ -1041,6 +1042,19 @@
             }
         },
         style: `
+        .urlincontent:before {
+            content: "[";
+            vertical-align: 0.05em;
+            padding: 0 0.15em;
+            color: #bdb5ab;
+        }
+        .urlincontent:after {
+            content: "]";
+            vertical-align: 0.05em;
+            padding: 0 0.15em;
+            color: #bdb5ab;
+        }
+
         .cps__watch_icon {position: relative;padding:0 1px;text-decoration:none;cursor:pointer;}
         .cps__watch_icon {text-decoration:none !important;}
 
@@ -1063,7 +1077,7 @@
 
         .cps__table {table-layout:fixed;width:100%;height:100%;border-top:1px solid #ead5bc;border-left:1px solid #ead5bc}
         .cps__table thead {background:#591804;border:1px solid #591804;color:#fff}
-        .cps__table td,.cps__table th {padding:3px 5px;border-bottom:1px solid #ead5bc;border-right:1px solid #ead5bc;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .cps__table td,.cps__table th {padding:3px 5px;border-bottom:1px solid #ead5bc;border-right:1px solid #ead5bc;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center}
 
         .cps__scroll-area {position:relative;height:100%;overflow:auto;border:1px solid #ead5bc}
         .cps__scroll-area::-webkit-scrollbar {width:6px;height:6px}

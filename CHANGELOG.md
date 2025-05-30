@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.4.1] - 2025-05-30
+
+### Changed
+
+- 修正点击`关注列表`的`楼层`跳转到对应页面时, 该页所有楼层的`关注`按钮都为已关注的问题
+
+- 优化`关注列表`显示样式
+
+
 ## [0.4.0] - 2025-05-29
 
 ### Changed

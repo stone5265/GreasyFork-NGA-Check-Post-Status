@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NGA检查帖子可见状态
 // @namespace    https://github.com/stone5265/GreasyFork-NGA-Check-Post-Status
-// @version      0.4.1
+// @version      0.4.2
 // @author       stone5265
 // @description  不可见楼层提醒 与 可见状态关注列表
 // @license      MIT
@@ -1042,13 +1042,13 @@
             }
         },
         style: `
-        .urlincontent:before {
+        #cps__watchlist_panel .urlincontent:before {
             content: "[";
             vertical-align: 0.05em;
             padding: 0 0.15em;
             color: #bdb5ab;
         }
-        .urlincontent:after {
+        #cps__watchlist_panel .urlincontent:after {
             content: "]";
             vertical-align: 0.05em;
             padding: 0 0.15em;

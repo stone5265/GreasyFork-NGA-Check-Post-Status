@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2025-10-14
+
+### Added
+
+- 设置面板新增`版面提示开关`，默认开启，开启后会对受限版面提示`该版面需要登陆才能访问，不支持[关注按钮]`
+
+- 设置面板新增`关注按钮开关`，默认开启，开启后会在`点赞`按钮旁边添加`关注`按钮，用于将该楼层添加进`关注列表`
+
+### Changed
+
+- 移除 JQuery 依赖
+
+- 更换 localForage CDN 地址，修复脚本失效问题
+
+- 略微降低`该版面需要登陆才能访问，不支持[关注按钮]`提示频率
+
 
 ## [0.4.2] - 2025-05-31
 

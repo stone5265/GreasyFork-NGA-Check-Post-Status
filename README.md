@@ -44,9 +44,9 @@
 
 ## 安装
 
-- GreasyFork: [地址](https://greasyfork.org/zh-CN/scripts/531676-nga%E6%A3%80%E6%9F%A5%E5%B8%96%E5%AD%90%E5%8F%AF%E8%A7%81%E7%8A%B6%E6%80%81)
+- GreasyFork: [地址](https://greasyfork.org/zh-CN/scripts/531676)
 
-- GreasyFork国内镜像: [地址](https://greasyfork.dpdns.org/zh-CN/scripts/531676-nga%E6%A3%80%E6%9F%A5%E5%B8%96%E5%AD%90%E5%8F%AF%E8%A7%81%E7%8A%B6%E6%80%81)
+- GreasyFork国内镜像: [地址](https://gfork.zh-tw.eu.org/zh-hans/scripts/531676)
 
 ## 兼容性支持
 

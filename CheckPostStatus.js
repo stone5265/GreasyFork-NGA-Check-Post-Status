@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NGA检查帖子可见状态
 // @namespace    https://github.com/stone5265/GreasyFork-NGA-Check-Post-Status
-// @version      1.0.0
+// @version      1.0.1
 // @author       stone5265
 // @description  不可见楼层提醒 与 可见状态关注列表
 // @license      MIT
@@ -524,6 +524,10 @@
             // 检查该页面下登录用户的发言
             const uid = parseInt(postbox.querySelector('a[name="uid"]').textContent)
             if (!isNaN(__CURRENT_UID) && uid === __CURRENT_UID) {
+
+                const tagBlock = postbox.querySelector('.small_colored_text_btn.block_txt_c2.stxt')
+                tagBlock.insertAdjacentHTML('beforeend', '<span class="visibility_text" style="font-weight: bold;"> 检测中... </span>')
+                
                 if (!isLimit) {
                     // (正常区) 使用游客状态对当前页可见楼层进行标记
                     if (checkUrl !== this.lastVisibleCheckUrl) {
@@ -632,7 +636,8 @@
                 } else {
                     tag = '<span class="visibility_text" style="font-weight: bold;"> 可见 </span>'
                 }
-                postbox.querySelector('.small_colored_text_btn.block_txt_c2.stxt').insertAdjacentHTML('beforeend', tag)
+                tagBlock.querySelector('.visibility_text').remove()
+                tagBlock.insertAdjacentHTML('beforeend', tag)
             }
         },
         /**
@@ -747,11 +752,11 @@
             const maxFloor = commonui.postArg.def.tReplies
             // 获取当前所在页的页数 (注: 使用  __PAGE[2] 获取的当前页数 在点击"加载下一页"按钮时 获取的还是当前页而非新加载出来的一页的页数)
             const pageMatch = checkUrl.match(/page=([\d]+)/)
-            const __PAGE = window.__PAGE || []
+            const __PAGE = commonui.postArg.w.__PAGE || []
             // 正序模式回帖或者编辑, 前者page=e, 后者不会出现page=
             const currentPage = pageMatch ? parseInt(pageMatch[1]) : (__PAGE && __PAGE[2] ? __PAGE[2] : 1)
             // 是否为最后一页
-            const isLastPage = pageMatch === undefined || currentPage === (__PAGE && __PAGE[1])
+            const isLastPage = pageMatch === null || currentPage === (__PAGE && __PAGE[1])
             // 该页开始楼层号
             let startFloor
             // 该页截止楼层号

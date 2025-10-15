@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2025-10-15
+
+### Added
+
+- 检查当前用户的楼层时，新增`检测中...`提示，检测完毕该提示变为对应的`可见`/`不可见`
+
+### Changed
+
+- 修复回帖后错误的`缺失楼层提示`问题
+
+
 ## [1.0.0] - 2025-10-14
 
 ### Added

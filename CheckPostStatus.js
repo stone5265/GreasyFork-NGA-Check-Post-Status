@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NGA检查帖子可见状态
 // @namespace    https://github.com/stone5265/GreasyFork-NGA-Check-Post-Status
-// @version      1.0.1
+// @version      1.0.2
 // @author       stone5265
 // @description  不可见楼层提醒 与 可见状态关注列表
 // @license      MIT
@@ -744,6 +744,8 @@
             if (checkUrl === this.lastMissingCheckUrl) return
             if (!commonui.postArg || !commonui.postArg.def) return   // 等待加载完页面
             this.lastMissingCheckUrl = checkUrl
+            // 若是只查看某个回复，则不必检查
+            if (checkUrl.match(/pid=([\d]+)/) !== null) return
             // 倒序模式
             const isReversed = commonui.postArg.def.tmBit1 & 262144
             // 只看作者模式
@@ -1527,7 +1529,7 @@
             setInterval(() => {
                 this.isThreads() && this.renderThreads()
                 this.isForms() && this.renderForms()
-            }, 100)
+            }, 500)
         }
         /**
          * 获取脚本信息
